@@ -24,4 +24,5 @@ fn main() {
         };
         println!("{}", name.to_string_lossy());
     }
+    unsafe { libc::closedir(dir.as_ptr()) };
 }
