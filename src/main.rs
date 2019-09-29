@@ -29,7 +29,7 @@ impl Drop for Hubs<'_> {
 }
 
 impl<'iter> Iterator for Hubs<'iter> {
-    type Item = Hub;
+    type Item = Hub<'iter>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(entry) = NonNull::new(
@@ -42,18 +42,19 @@ impl<'iter> Iterator for Hubs<'iter> {
             ) } != 0 {
                 continue;
             }
-            return Some(Hub { entry })
+            return Some(Hub { entry, _lifetime_of_entry: PhantomData })
         }
         None
     }
 }
 
-pub struct Hub {
+pub struct Hub<'hub> {
     entry: NonNull<libc::dirent>,
+    _lifetime_of_entry: PhantomData<&'hub ()>
 }
 
-impl Hub {
-    pub fn name(&self) -> &'_ CStr {
+impl<'hub> Hub<'hub> {
+    pub fn name(&self) -> &'hub CStr {
         unsafe { 
             CStr::from_ptr(&self.entry.as_ref().d_name as *const _)
         }
