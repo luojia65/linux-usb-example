@@ -63,7 +63,6 @@ impl<'hub> Hub<'hub> {
 
 fn main() {
     // sysfs usb lookup
-    
     let mut vec = Vec::new();
     for hub in hubs().unwrap() {
         vec.push(hub);
