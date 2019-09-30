@@ -6,6 +6,16 @@ use std::io;
 const SYSFS_ROOT: &str = "/sys/bus/usb/devices\0";
 const USB_PREFIX: &str = "usb";
 
+#[inline]
+unsafe fn set_errno(errno: libc::c_int) {
+    *libc::__errno_location() = errno
+}
+
+#[inline]
+unsafe fn get_errno() -> libc::c_int {
+    *libc::__errno_location()
+}
+
 pub fn hubs<'iter>() -> io::Result<Hubs<'iter>> {
     let dir = NonNull::new(
         unsafe { libc::opendir(SYSFS_ROOT.as_ptr() as *const _) }
@@ -32,9 +42,16 @@ impl<'iter> Iterator for Hubs<'iter> {
     type Item = io::Result<Hub<'iter>>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some(entry) = NonNull::new(
-            unsafe { libc::readdir(self.dir.as_ptr()) }
-        ) {
+        loop {
+            unsafe { set_errno(0) };
+            let entry = match NonNull::new( unsafe { libc::readdir(self.dir.as_ptr()) }) {
+                Some(entry) => entry,
+                None => return if unsafe { get_errno() } == 0 {
+                    None
+                } else {
+                    Some(Err(io::Error::last_os_error()))
+                }
+            };
             if unsafe { libc::strncmp(
                 USB_PREFIX.as_ptr() as *const _,
                 &entry.as_ref().d_name as *const _,
@@ -45,11 +62,10 @@ impl<'iter> Iterator for Hubs<'iter> {
             let path = unsafe { libc::strdup(&entry.as_ref().d_name as *const _) };
             let path = match NonNull::new(path) {
                 Some(path) => path,
-                None => panic!("strdup returned null, this is a bug")
+                None => return Some(Err(io::Error::last_os_error()))
             };
             return Some(Ok(Hub { path, _lifetime_of_path: PhantomData }))
         }
-        None
     }
 }
 
@@ -70,7 +86,26 @@ impl<'hub> Hub<'hub> {
             CStr::from_ptr(self.path.as_ptr())
         }
     }
+
+    // fn devices(&self) {
+
+    // }
 }
+
+pub struct Devices<'iter> {
+    path: NonNull<libc::c_char>,
+    _lifetime_of_path: PhantomData<&'iter ()>
+}
+
+impl Drop for Devices<'_> {
+    fn drop(&mut self) {
+        unsafe { libc::free(self.path.as_ptr() as *mut _) }
+    }
+}
+
+// impl<'iter> Iterator for Devices<'iter> {
+//     type Item = io::Result<>
+// }
 
 fn main() -> io::Result<()> {
     // sysfs usb lookup
