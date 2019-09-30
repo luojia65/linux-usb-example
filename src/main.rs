@@ -29,7 +29,7 @@ impl Drop for Hubs<'_> {
 }
 
 impl<'iter> Iterator for Hubs<'iter> {
-    type Item = Hub<'iter>;
+    type Item = io::Result<Hub<'iter>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(entry) = NonNull::new(
@@ -42,33 +42,45 @@ impl<'iter> Iterator for Hubs<'iter> {
             ) } != 0 {
                 continue;
             }
-            return Some(Hub { entry, _lifetime_of_entry: PhantomData })
+            let path = unsafe { libc::strdup(&entry.as_ref().d_name as *const _) };
+            let path = match NonNull::new(path) {
+                Some(path) => path,
+                None => panic!("strdup returned null, this is a bug")
+            };
+            return Some(Ok(Hub { path, _lifetime_of_path: PhantomData }))
         }
         None
     }
 }
 
 pub struct Hub<'hub> {
-    entry: NonNull<libc::dirent>, // todo
-    _lifetime_of_entry: PhantomData<&'hub ()>
+    path: NonNull<libc::c_char>,
+    _lifetime_of_path: PhantomData<&'hub ()>
+}
+
+impl Drop for Hub<'_> {
+    fn drop(&mut self) {
+        unsafe { libc::free(self.path.as_ptr() as *mut _) }
+    }
 }
 
 impl<'hub> Hub<'hub> {
-    // pub fn name(&self) -> &'hub CStr {
-    //     unsafe { 
-    //         CStr::from_ptr(&self.entry.as_ref().d_name as *const _)
-    //     }
-    // }
+    fn path(&self) -> &'hub CStr {
+        unsafe { 
+            CStr::from_ptr(self.path.as_ptr())
+        }
+    }
 }
 
-fn main() {
+fn main() -> io::Result<()> {
     // sysfs usb lookup
     let mut vec = Vec::new();
-    for hub in hubs().unwrap() {
+    for hub in hubs()? {
         vec.push(hub);
         // println!("{}", hub.name().to_str().unwrap())
     }
     for hub in vec {
-        // println!("{}", hub.name().to_str().unwrap())
+        println!("{}", hub?.path().to_str().unwrap())
     }
+    Ok(())
 }
