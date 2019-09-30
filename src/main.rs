@@ -87,9 +87,14 @@ impl<'hub> Hub<'hub> {
         }
     }
 
-    // fn devices(&self) {
-
-    // }
+    pub fn devices(&self) -> io::Result<Devices<'hub>> {
+        let path = unsafe { libc::strdup(self.path.as_ptr()) };
+        let path = match NonNull::new(path) {
+            Some(path) => path,
+            None => return Err(io::Error::last_os_error())
+        };
+        Ok(Devices { path, _lifetime_of_path: PhantomData })
+    }
 }
 
 pub struct Devices<'iter> {
@@ -103,19 +108,50 @@ impl Drop for Devices<'_> {
     }
 }
 
-// impl<'iter> Iterator for Devices<'iter> {
-//     type Item = io::Result<>
-// }
+impl<'iter> Iterator for Devices<'iter> {
+    type Item = io::Result<Device<'iter>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        unimplemented!()
+    }
+}
+
+pub struct Device<'device> {
+    path: NonNull<libc::c_char>,
+    _lifetime_of_path: PhantomData<&'device ()>
+}
+
+impl Drop for Device<'_> {
+    fn drop(&mut self) {
+        unsafe { libc::free(self.path.as_ptr() as *mut _) }
+    }
+}
+
+impl<'device> Device<'device> {
+    fn path(&self) -> &'device CStr {
+        unsafe { 
+            CStr::from_ptr(self.path.as_ptr())
+        }
+    }
+}
 
 fn main() -> io::Result<()> {
     // sysfs usb lookup
-    let mut vec = Vec::new();
+    let mut all_hubs = Vec::new();
+    let mut all_devs = Vec::new();
     for hub in hubs()? {
-        vec.push(hub);
-        // println!("{}", hub.name().to_str().unwrap())
+        let hub = hub?;
+        for dev in hub.devices()? {
+            let dev = dev?;
+            all_devs.push(dev);
+        }
+        all_hubs.push(hub);
     }
-    for hub in vec {
-        println!("{}", hub?.path().to_str().unwrap())
+    for hub in all_hubs {
+        println!("{:?}", hub.path())
+    }
+    for dev in all_devs {
+        println!("{:?}", dev.path())
     }
     Ok(())
 }
