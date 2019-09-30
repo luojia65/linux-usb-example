@@ -49,21 +49,26 @@ impl<'iter> Iterator for Hubs<'iter> {
 }
 
 pub struct Hub<'hub> {
-    entry: NonNull<libc::dirent>,
+    entry: NonNull<libc::dirent>, // todo
     _lifetime_of_entry: PhantomData<&'hub ()>
 }
 
 impl<'hub> Hub<'hub> {
-    pub fn name(&self) -> &'hub CStr {
-        unsafe { 
-            CStr::from_ptr(&self.entry.as_ref().d_name as *const _)
-        }
-    }
+    // pub fn name(&self) -> &'hub CStr {
+    //     unsafe { 
+    //         CStr::from_ptr(&self.entry.as_ref().d_name as *const _)
+    //     }
+    // }
 }
 
 fn main() {
     // sysfs usb lookup
+    let mut vec = Vec::new();
     for hub in hubs().unwrap() {
-        println!("{}", hub.name().to_str().unwrap())
+        vec.push(hub);
+        // println!("{}", hub.name().to_str().unwrap())
+    }
+    for hub in vec {
+        // println!("{}", hub.name().to_str().unwrap())
     }
 }
